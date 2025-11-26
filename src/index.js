@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
+import cors from "cors";
 import dotenv from "dotenv";
 import * as z from "zod/v4";
 
@@ -79,6 +80,12 @@ registeredTools.push("insert_listing");
 
 // Set up Express server
 const app = express();
+// Enable CORS so Agent Builder (browser) can fetch /mcp
+app.use(cors({
+    origin: "*",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json());
 
 app.post("/mcp", async (req, res) => {
@@ -188,44 +195,10 @@ app.get("/mcp", (req, res) => {
         jsonrpc: "2.0",
         id: "browser-check",
         result: {
-            tools: [
-                {
-                    name: "clean_price",
-                    description: "Convert messy price text into a structured clean price.",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            price_text: { type: "string", description: "Raw price text (e.g. '12 bin TL')" }
-                        },
-                        required: ["price_text"]
-                    }
-                },
-                {
-                    name: "insert_listing",
-                    description: "Insert product listing into Supabase.",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            product_name: { type: "string" },
-                            brand: { type: "string" },
-                            condition: { type: "string" },
-                            category: { type: "string" },
-                            description: { type: "string" },
-                            original_price_text: { type: "string" },
-                            clean_price: { type: "number" }
-                        },
-                        required: [
-                            "product_name",
-                            "brand",
-                            "condition",
-                            "category",
-                            "description",
-                            "original_price_text",
-                            "clean_price"
-                        ]
-                    }
-                }
-            ]
+            tools: registeredTools.map((tool) => ({
+                name: tool,
+                description: "Available MCP tool"
+            }))
         }
     });
 });
