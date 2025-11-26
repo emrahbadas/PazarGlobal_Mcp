@@ -78,6 +78,44 @@ server.registerTool(
 );
 registeredTools.push("insert_listing");
 
+// JSON schema for each tool (used by Agent Builder discovery)
+const toolSchemas = {
+    clean_price: {
+        type: "object",
+        properties: {
+            price_text: {
+                type: "string",
+                description: "Raw price text (e.g. '12 bin TL')"
+            }
+        },
+        required: ["price_text"]
+    },
+    insert_listing: {
+        type: "object",
+        properties: {
+            product_name: { type: "string" },
+            brand: { type: "string" },
+            condition: { type: "string" },
+            category: { type: "string" },
+            description: { type: "string" },
+            original_price_text: { type: "string" },
+            clean_price: { type: "number" }
+        },
+        required: [
+            "product_name", "brand",
+            "condition", "category",
+            "description", "original_price_text",
+            "clean_price"
+        ]
+    }
+};
+
+// Simple mapping of tool handlers for JSON-RPC calls
+const toolHandlers = {
+    clean_price: async (args) => await cleanPrice(args),
+    insert_listing: async (args) => await insertListing(args)
+};
+
 // Set up Express server
 const app = express();
 // Enable CORS so Agent Builder (browser) can fetch /mcp
@@ -88,104 +126,49 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// MCP JSON-RPC handler
 app.post("/mcp", async (req, res) => {
-    // Quick JSON-RPC handler for Agent Builder compatibility (tools discovery)
-    const body = req.body || {};
-    const { method, id, params } = body;
+    const { jsonrpc, method, id, params } = req.body || {};
+    if (!method) return res.status(400).json({ error: "Invalid JSON-RPC request" });
 
     if (method === "tools/list") {
         return res.json({
             jsonrpc: "2.0",
             id,
             result: {
-                tools: [
-                    {
-                        name: "clean_price",
-                        description: "Convert messy price text into a structured clean price.",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                price_text: {
-                                    type: "string",
-                                    description: "Raw price text (e.g. '12 bin TL')"
-                                }
-                            },
-                            required: ["price_text"]
-                        }
-                    },
-                    {
-                        name: "insert_listing",
-                        description: "Insert product listing into Supabase.",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                product_name: { type: "string" },
-                                brand: { type: "string" },
-                                condition: { type: "string" },
-                                category: { type: "string" },
-                                description: { type: "string" },
-                                original_price_text: { type: "string" },
-                                clean_price: { type: "number" }
-                            },
-                            required: [
-                                "product_name",
-                                "brand",
-                                "condition",
-                                "category",
-                                "description",
-                                "original_price_text",
-                                "clean_price"
-                            ]
-                        }
-                    }
-                ]
+                tools: Object.entries(toolSchemas).map(([name, schema]) => ({
+                    name,
+                    description: `MCP Tool: ${name}`,
+                    parameters: schema,
+                    required: schema.required
+                }))
             }
         });
     }
 
     if (method === "tools/call") {
-        // Expecting params: { name: string, arguments: { ... } }
-        const params = req.body.params || {};
-        const toolName = params.name || params.tool || params.toolName;
-        const toolArgs = params.arguments || params.params || {};
-
+        const { name, arguments: args } = params || {};
+        const handler = toolHandlers[name];
+        if (!handler) {
+            return res.json({
+                jsonrpc: "2.0",
+                id,
+                error: { message: `Unknown tool: ${name}` }
+            });
+        }
         try {
-            if (toolName === "clean_price") {
-                const result = await cleanPrice(toolArgs);
-                return res.json({ jsonrpc: "2.0", id, result });
-            }
-
-            if (toolName === "insert_listing") {
-                const result = await insertListing(toolArgs);
-                return res.json({ jsonrpc: "2.0", id, result });
-            }
-
-            return res.json({
-                jsonrpc: "2.0",
-                id,
-                error: { message: `Unknown tool: ${toolName}` }
-            });
+            const result = await handler(args);
+            return res.json({ jsonrpc: "2.0", id, result });
         } catch (err) {
-            return res.json({
-                jsonrpc: "2.0",
-                id,
-                error: { message: err?.message || String(err) }
-            });
+            return res.json({ jsonrpc: "2.0", id, error: { message: err?.message || String(err) } });
         }
     }
 
-    // Fallback to full MCP Streamable HTTP transport for other requests
-    const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true
+    return res.json({
+        jsonrpc: "2.0",
+        id,
+        error: { message: "Invalid method" }
     });
-
-    res.on("close", () => {
-        transport.close();
-    });
-
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
 });
 
 // Provide a simple GET status page so visiting /mcp in a browser is informative
