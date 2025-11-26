@@ -118,25 +118,24 @@ const toolHandlers = {
 
 // Set up Express server
 const app = express();
-// Enable CORS so Agent Builder (browser) can fetch /mcp
-app.use(cors({
-    origin: "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type", "Authorization"]
-}));
 app.use(express.json());
 
-// Enable CORS for browser requests (Agent Builder needs this)
+// --- CORS Fix for MCP Browser Clients ---
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Content-Type");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
-    if (req.method === "OPTIONS") return res.sendStatus(204);
+    res.header("Access-Control-Expose-Headers", "*");
+
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+    }
     next();
 });
 
 // MCP JSON-RPC handler
 app.post("/mcp", async (req, res) => {
+    res.setHeader("Content-Type", "application/json");
     const { jsonrpc, method, id, params } = req.body || {};
     if (!method) return res.status(400).json({ error: "Invalid JSON-RPC request" });
 
@@ -195,12 +194,9 @@ app.get("/mcp", (req, res) => {
     });
 });
 
-const PORT = parseInt(process.env.PORT || process.env.MCP_PORT || "7777");
+const PORT = parseInt(process.env.PORT || "8080", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 app.listen(PORT, HOST, () => {
     console.log(`PazarGlobal MCP Server running on http://${HOST}:${PORT}/mcp`);
     console.log(`Tools loaded: ${registeredTools.join(', ')}`);
-}).on("error", (error) => {
-    console.error("Server error:", error);
-    process.exit(1);
 });
