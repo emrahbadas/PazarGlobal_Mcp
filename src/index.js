@@ -186,9 +186,11 @@ app.get("/mcp", (req, res) => {
         jsonrpc: "2.0",
         id: "browser-check",
         result: {
-            tools: registeredTools.map((tool) => ({
-                name: tool,
-                description: "Available MCP tool"
+            tools: Object.entries(toolSchemas).map(([name, schema]) => ({
+                name,
+                description: `MCP Tool: ${name}`,
+                parameters: schema,
+                required: schema.required
             }))
         }
     });
