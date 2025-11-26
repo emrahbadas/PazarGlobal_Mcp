@@ -194,6 +194,11 @@ app.get("/mcp", (req, res) => {
     });
 });
 
+// Health endpoint for Railway and other platforms' healthchecks
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 const PORT = parseInt(process.env.PORT || "8080", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 app.listen(PORT, HOST, () => {
