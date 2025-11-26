@@ -126,6 +126,15 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Enable CORS for browser requests (Agent Builder needs this)
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Content-Type");
+    res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    next();
+});
+
 // MCP JSON-RPC handler
 app.post("/mcp", async (req, res) => {
     const { jsonrpc, method, id, params } = req.body || {};
