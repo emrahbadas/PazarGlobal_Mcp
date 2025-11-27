@@ -133,6 +133,11 @@ app.use((req, res, next) => {
     next();
 });
 
+// Root endpoint (fallback) so platform checks always receive OK
+app.get("/", (req, res) => {
+    res.status(200).json({ status: "ok", root: true });
+});
+
 // MCP JSON-RPC handler
 app.post("/mcp", async (req, res) => {
     res.setHeader("Content-Type", "application/json");
